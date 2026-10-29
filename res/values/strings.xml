@@ -158,6 +158,8 @@
     <string name="liquid_glass_style_coloros">ColorOS</string>
     <string name="liquid_glass_style_ios_summary">Clear glass that bends what is behind it at the edges</string>
     <string name="liquid_glass_style_coloros_summary">Frosted glass with a soft tint, a lit rim and a faint inner glow, as in ColorOS</string>
+    <string name="liquid_glass_refraction_header">Refraction</string>
+    <string name="liquid_glass_refraction_summary">How far the rim of the glass bends in what lies just beyond it, as on the iPadOS dock and Search field</string>
     <string name="liquid_glass_use">Use Liquid Glass</string>
     <string name="liquid_glass_use_summary">Turn the system\'s frosted surfaces into light-bending glass</string>
     <string name="liquid_glass_hint">Applies to every blurred surface at once.</string>

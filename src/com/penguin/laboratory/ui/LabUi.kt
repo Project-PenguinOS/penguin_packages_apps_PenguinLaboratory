@@ -229,6 +229,7 @@ fun PercentItem(
     index: Int,
     count: Int,
     icon: Int? = null,
+    enabled: Boolean = true,
 ) {
     var current by remember(value) { mutableFloatStateOf(value) }
     SegmentedBlock(index, count) {
@@ -239,6 +240,7 @@ fun PercentItem(
                 current = it
                 onValueChange(it)
             },
+            enabled = enabled,
         )
     }
 }
@@ -283,6 +285,7 @@ fun <T> ConnectedChoice(
     onSelect: (T) -> Unit,
     label: @Composable (T) -> String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier.fillMaxWidth(),
@@ -292,6 +295,7 @@ fun <T> ConnectedChoice(
             ToggleButton(
                 checked = option == selected,
                 onCheckedChange = { onSelect(option) },
+                enabled = enabled,
                 modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
                 // Every option is a full pill, like the selected one, so the row has one outline.
                 shapes = ToggleButtonShapes(PillShape, PillShape, PillShape),
