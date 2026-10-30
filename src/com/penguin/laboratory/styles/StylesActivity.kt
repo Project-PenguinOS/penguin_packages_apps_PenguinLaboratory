@@ -41,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.penguin.laboratory.R
 import com.penguin.laboratory.ui.ConnectedChoice
+import com.penguin.laboratory.ui.DropdownItem
 import com.penguin.laboratory.ui.LabTheme
 import com.penguin.laboratory.ui.SectionHeader
 import com.penguin.laboratory.ui.SegmentedBlock
@@ -150,20 +151,25 @@ class StylesActivity : ComponentActivity() {
                 item { SectionHeader(stringResource(R.string.styles_qs_title)) }
                 item {
                     SegmentedGroup {
-                        SegmentedBlock(index = 0, count = 2) {
-                            StyleChoice(
-                                choices = StylesStore.qsPanel,
-                                selected = qs,
-                                enabled = !oneUi,
-                                default = Pair(0, R.string.styles_default),
-                            ) {
+                        // Too many styles with long names for a button row, so a menu.
+                        val labels =
+                            mapOf(0 to R.string.styles_default) +
+                                StylesStore.qsPanel.associate { it.value to it.label }
+                        DropdownItem(
+                            title = stringResource(R.string.styles_qs_style),
+                            options = labels.keys.toList(),
+                            selected = qs,
+                            onSelect = {
                                 StylesStore.put(context, StylesStore.QS_PANEL, it)
                                 qs = it
-                            }
-                            if (oneUi) {
-                                Note(stringResource(R.string.styles_qs_oneui_active))
-                            }
-                        }
+                            },
+                            label = { stringResource(labels[it] ?: R.string.styles_default) },
+                            index = 0,
+                            count = 2,
+                            enabled = !oneUi,
+                            supporting =
+                                if (oneUi) stringResource(R.string.styles_qs_oneui_active) else null,
+                        )
                         SwitchItem(
                             title = stringResource(R.string.styles_qs_folder),
                             supporting = stringResource(R.string.styles_qs_folder_summary),
@@ -210,7 +216,6 @@ class StylesActivity : ComponentActivity() {
     private fun StyleChoice(
         choices: List<StylesStore.Choice>,
         selected: Int,
-        enabled: Boolean = true,
         default: Pair<Int, Int>? = null,
         onSelect: (Int) -> Unit,
     ) {
@@ -219,18 +224,8 @@ class StylesActivity : ComponentActivity() {
         ConnectedChoice(
             options = options,
             selected = selected,
-            onSelect = { if (enabled) onSelect(it) },
+            onSelect = onSelect,
             label = { stringResource(labels.getValue(it)) },
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-    }
-
-    @Composable
-    private fun Note(text: String) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),
         )
     }

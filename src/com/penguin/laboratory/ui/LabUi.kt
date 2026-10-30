@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 
 package com.penguin.laboratory.ui
 
@@ -19,7 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -39,6 +44,7 @@ import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +64,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
+import com.penguin.laboratory.R
 
 /** Penguin Laboratory's theme: wallpaper colours with the expressive motion scheme. */
 @Composable
@@ -305,6 +312,57 @@ fun <T> ConnectedChoice(
                     ),
             ) {
                 Text(label(option), maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * A segmented row that opens a menu of all options, for choices too long for a [ConnectedChoice].
+ */
+@Composable
+fun <T> DropdownItem(
+    title: String,
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    label: @Composable (T) -> String,
+    index: Int,
+    count: Int,
+    enabled: Boolean = true,
+    supporting: String? = null,
+    icon: Int? = null,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded && enabled, onExpandedChange = { expanded = it }) {
+        // The menu anchor opens and closes the menu on tap, so the row's own click does nothing.
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index, count),
+            enabled = enabled,
+            modifier =
+                Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled),
+            leadingContent = icon?.let { { Icon(painterResource(it), contentDescription = null) } },
+            supportingContent = { Text(supporting ?: label(selected)) },
+            trailingContent = { ExposedDropdownMenuDefaults.TrailingIcon(expanded && enabled) },
+        ) {
+            Text(title)
+        }
+        ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(label(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                    trailingIcon =
+                        if (option == selected) {
+                            { Icon(painterResource(R.drawable.ic_check), contentDescription = null) }
+                        } else {
+                            null
+                        },
+                )
             }
         }
     }

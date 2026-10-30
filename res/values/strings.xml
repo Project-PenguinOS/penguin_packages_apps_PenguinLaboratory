@@ -182,6 +182,7 @@
     </plurals>
     <string name="styles_default">Default</string>
     <string name="styles_qs_title">Quick Settings</string>
+    <string name="styles_qs_style">Style</string>
     <string name="styles_qs_penguin">Penguin</string>
     <string name="styles_qs_myui">MyUI</string>
     <string name="styles_qs_harmony">HarmonyOS</string>
