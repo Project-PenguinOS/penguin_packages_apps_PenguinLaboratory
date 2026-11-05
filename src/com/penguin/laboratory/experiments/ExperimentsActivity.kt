@@ -50,10 +50,36 @@ object ExperimentsStore {
         @StringRes val summary: Int,
         @DrawableRes val icon: Int,
         val dependsOn: String? = null,
+        val defaultOn: Boolean = false,
     )
 
     val lockScreen =
         listOf(
+            Experiment(
+                "ls_now_bar",
+                secure = false,
+                R.string.experiments_ls_now_bar,
+                R.string.experiments_ls_now_bar_summary,
+                R.drawable.materialsymbols_ic_music_note_rounded_filled,
+                defaultOn = true,
+            ),
+            Experiment(
+                "ls_now_bar_art",
+                secure = false,
+                R.string.experiments_ls_now_bar_art,
+                R.string.experiments_ls_now_bar_art_summary,
+                R.drawable.materialsymbols_ic_wallpaper_rounded_filled,
+                dependsOn = "ls_now_bar",
+                defaultOn = true,
+            ),
+            Experiment(
+                "ls_lock_icon_top",
+                secure = false,
+                R.string.experiments_ls_lock_icon_top,
+                R.string.experiments_ls_lock_icon_top_summary,
+                R.drawable.materialsymbols_ic_layers_rounded_filled,
+                defaultOn = true,
+            ),
             Experiment(
                 "ls_media_expand",
                 secure = false,
@@ -115,10 +141,11 @@ object ExperimentsStore {
     fun isOn(context: Context, key: String): Boolean {
         val experiment = all.first { it.key == key }
         val resolver = context.contentResolver
+        val default = if (experiment.defaultOn) 1 else 0
         return if (experiment.secure) {
-            Settings.Secure.getInt(resolver, key, 0) != 0
+            Settings.Secure.getInt(resolver, key, default) != 0
         } else {
-            Settings.System.getInt(resolver, key, 0) != 0
+            Settings.System.getInt(resolver, key, default) != 0
         }
     }
 
