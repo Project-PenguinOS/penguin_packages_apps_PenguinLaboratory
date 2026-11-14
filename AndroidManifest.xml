@@ -16,6 +16,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <package android:name="com.crdroid.udfps.icons" />
+        <package android:name="com.crdroid.udfps.animations" />
     </queries>
 
     <application
@@ -53,6 +55,11 @@
             android:name=".styles.StylesActivity"
             android:exported="false"
             android:label="@string/styles_title"
+            android:theme="@style/Theme.Laboratory" />
+
+        <activity
+            android:name=".styles.UdfpsPickerActivity"
+            android:exported="false"
             android:theme="@style/Theme.Laboratory" />
 
         <activity

@@ -14,16 +14,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -32,8 +39,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -89,6 +100,8 @@ object StylesStore {
                 get(context, QS_PANEL, 1) != 0,
                 get(context, VOLUME_PANEL, 0) != 0,
                 get(context, POWER_MENU, 0) != 0,
+                UdfpsPack.ICON.get(context) != 0,
+                UdfpsPack.ANIMATION.get(context) != 0,
             )
             .count { it }
 }
@@ -116,6 +129,13 @@ class StylesActivity : ComponentActivity() {
             remember(generation) { mutableStateOf(StylesStore.get(context, StylesStore.VOLUME_PANEL, 0)) }
         var power by
             remember(generation) { mutableStateOf(StylesStore.get(context, StylesStore.POWER_MENU, 0)) }
+        val udfpsIcons = remember { UdfpsPack.ICON.load(context) }
+        val udfpsAnimations = remember { UdfpsPack.ANIMATION.load(context) }
+        val udfpsIcon = remember(generation) { UdfpsPack.ICON.get(context) }
+        val udfpsAnimation = remember(generation) { UdfpsPack.ANIMATION.get(context) }
+        var playing by remember { mutableStateOf(true) }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { playing = true }
+        LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { playing = false }
 
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
@@ -207,7 +227,76 @@ class StylesActivity : ComponentActivity() {
                         }
                     }
                 }
+                val udfps =
+                    listOfNotNull(
+                        Triple(UdfpsPack.ICON, udfpsIcons, udfpsIcon).takeIf { udfpsIcons.isNotEmpty() },
+                        Triple(UdfpsPack.ANIMATION, udfpsAnimations, udfpsAnimation)
+                            .takeIf { udfpsAnimations.isNotEmpty() },
+                    )
+                if (udfps.isNotEmpty()) {
+                    item { SectionHeader(stringResource(R.string.styles_udfps_title)) }
+                    item {
+                        SegmentedGroup {
+                            udfps.forEachIndexed { index, (pack, entries, chosen) ->
+                                UdfpsItem(pack, entries.getOrNull(chosen), chosen, playing, index, udfps.size)
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    @Composable
+    private fun UdfpsItem(
+        pack: UdfpsPack,
+        chosen: UdfpsPack.Entry?,
+        chosenIndex: Int,
+        playing: Boolean,
+        index: Int,
+        count: Int,
+    ) {
+        val icon = pack == UdfpsPack.ICON
+        SegmentedListItem(
+            onClick = { startActivity(UdfpsPickerActivity.intent(this, pack)) },
+            shapes = ListItemDefaults.segmentedShapes(index, count),
+            leadingContent = {
+                Icon(
+                    painterResource(
+                        if (icon) R.drawable.materialsymbols_ic_fingerprint_rounded_filled
+                        else R.drawable.materialsymbols_ic_animation_rounded_filled
+                    ),
+                    contentDescription = null,
+                )
+            },
+            trailingContent = {
+                Box(
+                    Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val px = with(LocalDensity.current) { 48.dp.roundToPx() }
+                    when {
+                        chosen == null || (!icon && chosenIndex == 0) ->
+                            Icon(
+                                painterResource(R.drawable.materialsymbols_ic_block_rounded_filled),
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        else ->
+                            PackImage(
+                                pack,
+                                chosen.drawable,
+                                if (icon) px * 2 / 3 else px,
+                                18,
+                                playing,
+                                if (icon) Modifier.size(32.dp) else Modifier.fillMaxSize(),
+                            )
+                    }
+                }
+            },
+        ) {
+            Text(stringResource(if (icon) R.string.styles_udfps_icon else R.string.styles_udfps_animation))
         }
     }
 
