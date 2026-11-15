@@ -94,8 +94,8 @@ fun loadPackFrames(
     name: String,
     sizePx: Int,
     maxFrames: Int,
-): PackFrames? =
-    try {
+): PackFrames? {
+    return try {
         val res = pack.resources(context) ?: return null
         val id = res.getIdentifier(name, "drawable", pack.pkg)
         if (id == 0) return null
@@ -118,6 +118,7 @@ fun loadPackFrames(
     } catch (_: Exception) {
         null
     }
+}
 
 private fun animationFrames(res: Resources, id: Int): List<Pair<Int, Int>>? {
     val value = TypedValue()
