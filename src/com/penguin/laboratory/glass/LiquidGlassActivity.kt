@@ -84,6 +84,16 @@ object LiquidGlassStore {
         Settings.Secure.putInt(context.contentResolver, REFRACTION_KEY, percent.coerceIn(0, 100))
     }
 
+    /** A faint accent tint behind the notifications in the shade, read by SystemUI. */
+    private const val DUAL_TONE_KEY = "penguin_liquid_glass_dual_tone"
+
+    fun isDualTone(context: Context) =
+        Settings.Secure.getInt(context.contentResolver, DUAL_TONE_KEY, 0) == 1
+
+    fun setDualTone(context: Context, enabled: Boolean) {
+        Settings.Secure.putInt(context.contentResolver, DUAL_TONE_KEY, if (enabled) 1 else 0)
+    }
+
 }
 
 class LiquidGlassActivity : ComponentActivity() {
@@ -100,6 +110,7 @@ class LiquidGlassActivity : ComponentActivity() {
         var tabBars by remember { mutableStateOf(TabBarStore.isEnabled(this)) }
         var style by remember { mutableStateOf(LiquidGlassStore.style(this)) }
         var refraction by remember { mutableIntStateOf(LiquidGlassStore.refraction(this)) }
+        var dualTone by remember { mutableStateOf(LiquidGlassStore.isDualTone(this)) }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -207,6 +218,22 @@ class LiquidGlassActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                item { SectionHeader(stringResource(R.string.liquid_glass_shade_header)) }
+                item {
+                    SegmentedGroup {
+                        SwitchItem(
+                            title = stringResource(R.string.liquid_glass_dual_tone),
+                            supporting = stringResource(R.string.liquid_glass_dual_tone_summary),
+                            checked = dualTone,
+                            onCheckedChange = {
+                                LiquidGlassStore.setDualTone(this@LiquidGlassActivity, it)
+                                dualTone = it
+                            },
+                            index = 0,
+                            count = 1,
                         )
                     }
                 }

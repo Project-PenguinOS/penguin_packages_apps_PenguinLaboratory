@@ -162,6 +162,9 @@
     <string name="liquid_glass_refraction_summary">How far the rim of the glass bends in what lies just beyond it, as on the iPadOS dock and Search field</string>
     <string name="liquid_glass_use">Use Liquid Glass</string>
     <string name="liquid_glass_use_summary">Turn the system\'s frosted surfaces into light-bending glass</string>
+    <string name="liquid_glass_shade_header">Shade</string>
+    <string name="liquid_glass_dual_tone">Dual tone shade</string>
+    <string name="liquid_glass_dual_tone_summary">A faint tint behind notifications, so they stand apart from Quick Settings</string>
     <string name="liquid_glass_hint">Applies to every blurred surface at once.</string>
     <string name="tab_bars_header">In apps</string>
     <string name="tab_bars_use">Glass tab bars</string>
