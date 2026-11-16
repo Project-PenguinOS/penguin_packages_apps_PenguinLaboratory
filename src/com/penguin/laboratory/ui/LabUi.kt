@@ -142,14 +142,16 @@ fun SwitchItem(
     count: Int,
     supporting: String? = null,
     icon: Int? = null,
+    enabled: Boolean = true,
 ) {
     SegmentedListItem(
         checked = checked,
         onCheckedChange = onCheckedChange,
         shapes = ListItemDefaults.segmentedShapes(index, count),
+        enabled = enabled,
         leadingContent = icon?.let { { Icon(painterResource(it), contentDescription = null) } },
         supportingContent = supporting?.let { { Text(it) } },
-        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
     ) {
         Text(title)
     }

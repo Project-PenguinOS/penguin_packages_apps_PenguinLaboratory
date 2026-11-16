@@ -138,6 +138,15 @@ class StylesActivity : ComponentActivity() {
             remember(generation) {
                 mutableStateOf(StylesStore.get(context, StylesStore.UDFPS_SCREEN_OFF_ICON, 0) != 0)
             }
+        // With Always-on display on, the fingerprint icon is always on the screen-off display.
+        val alwaysOnDisplay =
+            remember(generation) {
+                android.provider.Settings.Secure.getInt(
+                    context.contentResolver,
+                    "doze_always_on",
+                    0,
+                ) != 0
+            }
         var playing by remember { mutableStateOf(true) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { playing = true }
         LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { playing = false }
@@ -258,8 +267,13 @@ class StylesActivity : ComponentActivity() {
                             }
                             SwitchItem(
                                 title = stringResource(R.string.styles_udfps_screen_off),
-                                supporting = stringResource(R.string.styles_udfps_screen_off_summary),
-                                checked = udfpsScreenOff,
+                                supporting =
+                                    stringResource(
+                                        if (alwaysOnDisplay) R.string.styles_udfps_screen_off_aod
+                                        else R.string.styles_udfps_screen_off_summary
+                                    ),
+                                checked = udfpsScreenOff || alwaysOnDisplay,
+                                enabled = !alwaysOnDisplay,
                                 onCheckedChange = {
                                     StylesStore.put(
                                         context,
