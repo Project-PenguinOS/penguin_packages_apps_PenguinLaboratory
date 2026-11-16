@@ -8,6 +8,24 @@
 package com.penguin.laboratory
 
 import android.content.Intent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import com.penguin.laboratory.tabs.LabTabPage
+import com.penguin.laboratory.tabs.LabTabs
+import com.penguin.laboratory.ui.FloatingTabBar
+import com.penguin.laboratory.ui.TabBarClearance
+import com.penguin.laboratory.ui.TabItem
+import com.penguin.laboratory.ui.backdropSource
+import com.penguin.laboratory.ui.rememberBackdrop
+import kotlinx.coroutines.launch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -91,14 +109,41 @@ class LaboratoryActivity : ComponentActivity() {
         val stylesChanged = remember(generation) { StylesStore.customised(this) }
         val experimentsOn = remember(generation) { ExperimentsStore.enabledCount(this) }
 
+        val tabs = LabTabs.all
+        val items =
+            listOf(TabItem(R.string.tab_originals, R.drawable.materialsymbols_ic_science_rounded_filled)) +
+                tabs.map { TabItem(it.label, it.icon) }
+        val pager = rememberPagerState { items.size }
+        val scope = rememberCoroutineScope()
+        val backdrop = rememberBackdrop()
+        val listStates = remember { List(items.size) { LazyListState() } }
+        // Reading down a tab shrinks the bar to the current tab; scrolling back up brings it back.
+        var collapsed by remember { mutableStateOf(false) }
+        val hideOnScroll = remember {
+            object : NestedScrollConnection {
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (consumed.y < -12f) collapsed = true else if (consumed.y > 12f) collapsed = false
+                    return Offset.Zero
+                }
+            }
+        }
+        LaunchedEffect(pager.currentPage) { collapsed = false }
+        val page = pager.currentPage
+
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
-            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            modifier =
+                Modifier.nestedScroll(scrollBehavior.nestedScrollConnection).nestedScroll(hideOnScroll),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             topBar = {
                 LargeFlexibleTopAppBar(
-                    title = { Text(stringResource(R.string.laboratory_title)) },
-                    subtitle = { Text(stringResource(R.string.laboratory_summary)) },
+                    title = {
+                        Text(
+                            if (page == 0) stringResource(R.string.laboratory_title)
+                            else stringResource(tabs[page - 1].title)
+                        )
+                    },
+                    subtitle = { if (page == 0) Text(stringResource(R.string.laboratory_summary)) },
                     colors =
                         TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -108,149 +153,178 @@ class LaboratoryActivity : ComponentActivity() {
                 )
             },
         ) { padding ->
-            LazyColumn(
-                contentPadding =
-                    PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = padding.calculateTopPadding() + 8.dp,
-                        bottom = padding.calculateBottomPadding() + 24.dp,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
-                    Experiment(
-                        title = stringResource(R.string.edge_lighting_title),
-                        summary = stringResource(R.string.edge_lighting_entry_summary),
-                        status =
-                            stringResource(
-                                if (edgeOn) R.string.laboratory_status_on
-                                else R.string.laboratory_status_off
-                            ),
-                        active = edgeOn,
-                        icon = R.drawable.materialsymbols_ic_bolt_rounded_filled,
-                        restShape = MaterialShapes.Cookie9Sided,
-                        pressedShape = MaterialShapes.Sunny,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, EdgeLightingActivity::class.java))
+            val listPadding =
+                PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = padding.calculateTopPadding() + 8.dp,
+                    bottom = padding.calculateBottomPadding() + TabBarClearance,
+                )
+            Box(Modifier.fillMaxSize()) {
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier.fillMaxSize().backdropSource(backdrop),
+                    beyondViewportPageCount = 1,
+                ) { index ->
+                    if (index == 0) {
+                        LazyColumn(
+                            state = listStates[0],
+                            contentPadding = listPadding,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.edge_lighting_title),
+                                summary = stringResource(R.string.edge_lighting_entry_summary),
+                                status =
+                                    stringResource(
+                                        if (edgeOn) R.string.laboratory_status_on
+                                        else R.string.laboratory_status_off
+                                    ),
+                                active = edgeOn,
+                                icon = R.drawable.materialsymbols_ic_bolt_rounded_filled,
+                                restShape = MaterialShapes.Cookie9Sided,
+                                pressedShape = MaterialShapes.Sunny,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, EdgeLightingActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.wonderland_title),
+                                summary = stringResource(R.string.wonderland_entry_summary),
+                                status =
+                                    resources.getQuantityString(
+                                        R.plurals.laboratory_wallpaper_count,
+                                        wallpapers,
+                                        wallpapers,
+                                    ),
+                                active = wallpapers > 0,
+                                icon = R.drawable.materialsymbols_ic_wallpaper_rounded_filled,
+                                restShape = MaterialShapes.Flower,
+                                pressedShape = MaterialShapes.SoftBurst,
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, WonderlandActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.dex_title),
+                                summary = stringResource(R.string.dex_entry_summary),
+                                status =
+                                    stringResource(
+                                        if (dexOn) R.string.laboratory_status_on
+                                        else R.string.laboratory_status_off
+                                    ),
+                                active = dexOn,
+                                icon = R.drawable.materialsymbols_ic_desktop_windows_rounded_filled,
+                                restShape = MaterialShapes.Slanted,
+                                pressedShape = MaterialShapes.Pill,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, DexActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.liquid_glass_title),
+                                summary = stringResource(R.string.liquid_glass_entry_summary),
+                                status =
+                                    stringResource(
+                                        if (glassOn) R.string.laboratory_status_on
+                                        else R.string.laboratory_status_off
+                                    ),
+                                active = glassOn,
+                                icon = R.drawable.materialsymbols_ic_water_drop_rounded_filled,
+                                restShape = MaterialShapes.Gem,
+                                pressedShape = MaterialShapes.Circle,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, LiquidGlassActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.cos_title),
+                                summary = stringResource(R.string.cos_entry_summary),
+                                status =
+                                    resources.getQuantityString(R.plurals.cos_status, cosParts, cosParts),
+                                active = cosParts > 0,
+                                icon = R.drawable.materialsymbols_ic_motion_photos_on_rounded_filled,
+                                restShape = MaterialShapes.Cookie6Sided,
+                                pressedShape = MaterialShapes.Oval,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, CosExperienceActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.styles_title),
+                                summary = stringResource(R.string.styles_entry_summary),
+                                status =
+                                    resources.getQuantityString(
+                                        R.plurals.styles_status,
+                                        stylesChanged,
+                                        stylesChanged,
+                                    ),
+                                active = stylesChanged > 0,
+                                icon = R.drawable.materialsymbols_ic_palette_rounded_filled,
+                                restShape = MaterialShapes.Clover4Leaf,
+                                pressedShape = MaterialShapes.Square,
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, StylesActivity::class.java))
+                            }
+                        }
+                        item {
+                            Experiment(
+                                title = stringResource(R.string.experiments_title),
+                                summary = stringResource(R.string.experiments_entry_summary),
+                                status =
+                                    resources.getQuantityString(
+                                        R.plurals.experiments_status,
+                                        experimentsOn,
+                                        experimentsOn,
+                                    ),
+                                active = experimentsOn > 0,
+                                icon = R.drawable.materialsymbols_ic_science_rounded_filled,
+                                restShape = MaterialShapes.Puffy,
+                                pressedShape = MaterialShapes.Cookie4Sided,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ) {
+                                startActivity(Intent(this@LaboratoryActivity, ExperimentsActivity::class.java))
+                            }
+                        }
+                        }
+                    } else {
+                        LabTabPage(tabs[index - 1], listPadding, listStates[index], generation)
                     }
                 }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.wonderland_title),
-                        summary = stringResource(R.string.wonderland_entry_summary),
-                        status =
-                            resources.getQuantityString(
-                                R.plurals.laboratory_wallpaper_count,
-                                wallpapers,
-                                wallpapers,
-                            ),
-                        active = wallpapers > 0,
-                        icon = R.drawable.materialsymbols_ic_wallpaper_rounded_filled,
-                        restShape = MaterialShapes.Flower,
-                        pressedShape = MaterialShapes.SoftBurst,
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, WonderlandActivity::class.java))
-                    }
-                }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.dex_title),
-                        summary = stringResource(R.string.dex_entry_summary),
-                        status =
-                            stringResource(
-                                if (dexOn) R.string.laboratory_status_on
-                                else R.string.laboratory_status_off
-                            ),
-                        active = dexOn,
-                        icon = R.drawable.materialsymbols_ic_desktop_windows_rounded_filled,
-                        restShape = MaterialShapes.Slanted,
-                        pressedShape = MaterialShapes.Pill,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, DexActivity::class.java))
-                    }
-                }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.liquid_glass_title),
-                        summary = stringResource(R.string.liquid_glass_entry_summary),
-                        status =
-                            stringResource(
-                                if (glassOn) R.string.laboratory_status_on
-                                else R.string.laboratory_status_off
-                            ),
-                        active = glassOn,
-                        icon = R.drawable.materialsymbols_ic_water_drop_rounded_filled,
-                        restShape = MaterialShapes.Gem,
-                        pressedShape = MaterialShapes.Circle,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, LiquidGlassActivity::class.java))
-                    }
-                }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.cos_title),
-                        summary = stringResource(R.string.cos_entry_summary),
-                        status =
-                            resources.getQuantityString(R.plurals.cos_status, cosParts, cosParts),
-                        active = cosParts > 0,
-                        icon = R.drawable.materialsymbols_ic_motion_photos_on_rounded_filled,
-                        restShape = MaterialShapes.Cookie6Sided,
-                        pressedShape = MaterialShapes.Oval,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, CosExperienceActivity::class.java))
-                    }
-                }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.styles_title),
-                        summary = stringResource(R.string.styles_entry_summary),
-                        status =
-                            resources.getQuantityString(
-                                R.plurals.styles_status,
-                                stylesChanged,
-                                stylesChanged,
-                            ),
-                        active = stylesChanged > 0,
-                        icon = R.drawable.materialsymbols_ic_palette_rounded_filled,
-                        restShape = MaterialShapes.Clover4Leaf,
-                        pressedShape = MaterialShapes.Square,
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, StylesActivity::class.java))
-                    }
-                }
-                item {
-                    Experiment(
-                        title = stringResource(R.string.experiments_title),
-                        summary = stringResource(R.string.experiments_entry_summary),
-                        status =
-                            resources.getQuantityString(
-                                R.plurals.experiments_status,
-                                experimentsOn,
-                                experimentsOn,
-                            ),
-                        active = experimentsOn > 0,
-                        icon = R.drawable.materialsymbols_ic_science_rounded_filled,
-                        restShape = MaterialShapes.Puffy,
-                        pressedShape = MaterialShapes.Cookie4Sided,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        startActivity(Intent(this@LaboratoryActivity, ExperimentsActivity::class.java))
-                    }
-                }
+                FloatingTabBar(
+                    items = items,
+                    selected = page,
+                    onSelect = {
+                        collapsed = false
+                        scope.launch { pager.animateScrollToPage(it) }
+                    },
+                    glass = glassOn,
+                    collapsed = collapsed,
+                    onExpand = { collapsed = false },
+                    backdrop = backdrop,
+                    modifier =
+                        Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = padding.calculateBottomPadding() + 12.dp),
+                )
             }
         }
     }
