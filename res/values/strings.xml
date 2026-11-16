@@ -201,6 +201,8 @@
     <string name="styles_udfps_title">Fingerprint</string>
     <string name="styles_udfps_icon">Fingerprint icon</string>
     <string name="styles_udfps_animation">Fingerprint animation</string>
+    <string name="styles_udfps_screen_off">Show icon when screen is off</string>
+    <string name="styles_udfps_screen_off_summary">Keeps a dimmed fingerprint icon on the dark screen while Always on display is off. Uses a little more battery</string>
 
     <!-- Experiments -->
     <string name="experiments_title">Experiments</string>

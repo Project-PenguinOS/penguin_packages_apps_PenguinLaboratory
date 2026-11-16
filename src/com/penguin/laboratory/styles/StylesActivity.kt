@@ -66,6 +66,7 @@ object StylesStore {
     const val QS_ONE_UI = "qs_oneui_experimental"
     const val VOLUME_PANEL = "volume_panel_style"
     const val POWER_MENU = "power_menu_style"
+    const val UDFPS_SCREEN_OFF_ICON = "doze_udfps_icon"
 
     /** A style with the value SystemUI reads and its label. */
     class Choice(val value: Int, @StringRes val label: Int)
@@ -133,6 +134,10 @@ class StylesActivity : ComponentActivity() {
         val udfpsAnimations = remember { UdfpsPack.ANIMATION.load(context) }
         val udfpsIcon = remember(generation) { UdfpsPack.ICON.get(context) }
         val udfpsAnimation = remember(generation) { UdfpsPack.ANIMATION.get(context) }
+        var udfpsScreenOff by
+            remember(generation) {
+                mutableStateOf(StylesStore.get(context, StylesStore.UDFPS_SCREEN_OFF_ICON, 0) != 0)
+            }
         var playing by remember { mutableStateOf(true) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { playing = true }
         LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { playing = false }
@@ -237,9 +242,26 @@ class StylesActivity : ComponentActivity() {
                     item { SectionHeader(stringResource(R.string.styles_udfps_title)) }
                     item {
                         SegmentedGroup {
+                            val count = udfps.size + 1
                             udfps.forEachIndexed { index, (pack, entries, chosen) ->
-                                UdfpsItem(pack, entries.getOrNull(chosen), chosen, playing, index, udfps.size)
+                                UdfpsItem(pack, entries.getOrNull(chosen), chosen, playing, index, count)
                             }
+                            SwitchItem(
+                                title = stringResource(R.string.styles_udfps_screen_off),
+                                supporting = stringResource(R.string.styles_udfps_screen_off_summary),
+                                checked = udfpsScreenOff,
+                                onCheckedChange = {
+                                    StylesStore.put(
+                                        context,
+                                        StylesStore.UDFPS_SCREEN_OFF_ICON,
+                                        if (it) 1 else 0,
+                                    )
+                                    udfpsScreenOff = it
+                                },
+                                index = udfps.size,
+                                count = count,
+                                icon = R.drawable.materialsymbols_ic_mobile_off_rounded_filled,
+                            )
                         }
                     }
                 }
