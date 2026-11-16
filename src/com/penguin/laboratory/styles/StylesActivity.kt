@@ -52,8 +52,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.penguin.laboratory.R
 import com.penguin.laboratory.ui.ConnectedChoice
-import com.penguin.laboratory.ui.DropdownItem
 import com.penguin.laboratory.ui.LabTheme
+import com.penguin.laboratory.ui.PreviewPicker
 import com.penguin.laboratory.ui.SectionHeader
 import com.penguin.laboratory.ui.SegmentedBlock
 import com.penguin.laboratory.ui.SegmentedGroup
@@ -176,25 +176,35 @@ class StylesActivity : ComponentActivity() {
                 item { SectionHeader(stringResource(R.string.styles_qs_title)) }
                 item {
                     SegmentedGroup {
-                        // Too many styles with long names for a button row, so a menu.
+                        // The styles differ in layout more than in name, so pictures of each.
                         val labels =
                             mapOf(0 to R.string.styles_default) +
                                 StylesStore.qsPanel.associate { it.value to it.label }
-                        DropdownItem(
-                            title = stringResource(R.string.styles_qs_style),
-                            options = labels.keys.toList(),
-                            selected = qs,
-                            onSelect = {
-                                StylesStore.put(context, StylesStore.QS_PANEL, it)
-                                qs = it
-                            },
-                            label = { stringResource(labels[it] ?: R.string.styles_default) },
-                            index = 0,
-                            count = 2,
-                            enabled = !oneUi,
-                            supporting =
-                                if (oneUi) stringResource(R.string.styles_qs_oneui_active) else null,
-                        )
+                        SegmentedBlock(index = 0, count = 2) {
+                            Text(
+                                stringResource(R.string.styles_qs_style),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            if (oneUi) {
+                                Text(
+                                    stringResource(R.string.styles_qs_oneui_active),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            PreviewPicker(
+                                options = labels.keys.toList(),
+                                selected = qs,
+                                onSelect = {
+                                    StylesStore.put(context, StylesStore.QS_PANEL, it)
+                                    qs = it
+                                },
+                                label = { stringResource(labels[it] ?: R.string.styles_default) },
+                                preview = { QsStylePreview(it) },
+                                enabled = !oneUi,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+                            )
+                        }
                         SwitchItem(
                             title = stringResource(R.string.styles_qs_folder),
                             supporting = stringResource(R.string.styles_qs_folder_summary),
