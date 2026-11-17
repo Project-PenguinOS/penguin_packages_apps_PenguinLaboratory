@@ -589,6 +589,12 @@ object LabTabs {
                         R.string.section_spoofing,
                         listOf(
                             LabRow.Link(
+                                "$S.custom.obscura.ObscuraAppSettings",
+                                R.string.row_obscura,
+                                R.string.row_obscura_summary,
+                                R.drawable.materialsymbols_ic_verified_rounded_filled,
+                            ),
+                            LabRow.Link(
                                 "$S.custom.spoofing.PlayIntegrityFix",
                                 R.string.row_pif,
                                 R.string.row_pif_summary,

@@ -202,4 +202,6 @@
     <string name="row_downgrade_summary">May crash or lose an app\'s data</string>
     <string name="row_usb_picker">USB mode picker</string>
     <string name="row_usb_picker_summary">Ask what to do when a USB cable connects</string>
+    <string name="row_obscura">Obscura</string>
+    <string name="row_obscura_summary">App visibility, isolation and developer setting controls</string>
 </resources>
