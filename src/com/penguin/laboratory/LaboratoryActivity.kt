@@ -26,6 +26,7 @@ import com.penguin.laboratory.ui.TabItem
 import com.penguin.laboratory.ui.backdropSource
 import com.penguin.laboratory.ui.rememberBackdrop
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.spring
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -129,6 +130,8 @@ class LaboratoryActivity : ComponentActivity() {
         }
         LaunchedEffect(pager.currentPage) { collapsed = false }
         val page = pager.currentPage
+        // The tab picked from the bar while the pager is still on its way there.
+        var jumpTo by remember { mutableIntStateOf(-1) }
 
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
@@ -312,10 +315,24 @@ class LaboratoryActivity : ComponentActivity() {
                 }
                 FloatingTabBar(
                     items = items,
-                    selected = page,
-                    onSelect = {
+                    selected = if (jumpTo >= 0) jumpTo else pager.targetPage,
+                    onSelect = { target ->
                         collapsed = false
-                        scope.launch { pager.animateScrollToPage(it) }
+                        jumpTo = target
+                        scope.launch {
+                            try {
+                                // Land next to a far tab first so only one page slides in.
+                                val from = pager.currentPage
+                                if (target - from > 1) pager.scrollToPage(target - 1)
+                                else if (from - target > 1) pager.scrollToPage(target + 1)
+                                pager.animateScrollToPage(
+                                    target,
+                                    animationSpec = spring(dampingRatio = 1f, stiffness = 300f),
+                                )
+                            } finally {
+                                if (jumpTo == target) jumpTo = -1
+                            }
+                        }
                     },
                     glass = glassOn,
                     collapsed = collapsed,

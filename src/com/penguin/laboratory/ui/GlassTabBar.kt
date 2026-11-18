@@ -9,10 +9,7 @@ import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -36,11 +33,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,11 +57,8 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -73,10 +69,16 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 // A droplet of glass: magnifies what's under it, pulls the rim in like the edge of a lens, and
@@ -109,6 +111,17 @@ half4 main(float2 p) {
 
 private val Pill = RoundedCornerShape(percent = 50)
 
+// Moving between tabs: a ~0.35 s glide that settles without a visible bounce.
+private val Glide = spring<Float>(dampingRatio = 0.82f, stiffness = 280f)
+// Under the finger the lens trails by about this long, enough to hide touch jitter.
+private const val FOLLOW_LAG_MS = 28f
+// The droplet swelling up and settling back into the bar.
+private val SwellIn = spring<Float>(dampingRatio = 0.8f, stiffness = 520f)
+private val SwellOut = spring<Float>(dampingRatio = 0.9f, stiffness = 320f)
+
+/** Where the lens is this frame. Read only while laying out or drawing, never in composition. */
+private class LensFrame(val x: Float, val y: Float, val w: Float, val h: Float, val swell: Float)
+
 /** Tabs with a lens under the chosen one that can be dragged between tabs. */
 @Composable
 internal fun GlassTabBar(
@@ -126,22 +139,15 @@ internal fun GlassTabBar(
     // The gesture below outlives recompositions, so it reads these through state.
     val current by rememberUpdatedState(selected)
     val select by rememberUpdatedState(onSelect)
-    var pressing by remember { mutableStateOf(false) }
-    var velocity by remember { mutableFloatStateOf(0f) }
     var rowOrigin by remember { mutableStateOf(Offset.Zero) }
     val lens = remember { Animatable(Float.NaN) }
-    val press by
-        animateFloatAsState(
-            if (pressing) 1f else 0f,
-            spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
-            label = "press",
-        )
-    val stretch by
-        animateFloatAsState(
-            (abs(velocity) / 5000f).coerceAtMost(0.28f),
-            spring(stiffness = Spring.StiffnessMedium),
-            label = "stretch",
-        )
+    val swell = remember { Animatable(0f) }
+    // The tab the lens is heading for, so a page change we caused doesn't send it off again.
+    var aimed by remember { mutableIntStateOf(selected) }
+    var pressing by remember { mutableStateOf(false) }
+    // The lens's speed while it follows a finger, in px/s; the springs report their own.
+    var followSpeed by remember { mutableFloatStateOf(0f) }
+    val moves = remember { arrayOfNulls<Job>(2) }
     val backShader = remember { RuntimeShader(BUBBLE) }
     val frontShader = remember { RuntimeShader(BUBBLE) }
 
@@ -156,61 +162,90 @@ internal fun GlassTabBar(
             val rowPx = with(density) { maxHeight.toPx() }
             val totalPx = itemPx * items.size
 
+            /** Glides the lens to [index], swelling it on the way like a lifted droplet. */
+            fun glideTo(index: Int) {
+                aimed = index
+                val to = itemPx * index
+                val far = lens.value.isNaN() || abs(lens.value - to) > itemPx * 0.5f
+                moves[0]?.cancel()
+                moves[1]?.cancel()
+                val handoff = followSpeed
+                followSpeed = 0f
+                moves[0] = scope.launch { lens.animateTo(to, Glide, initialVelocity = handoff) }
+                moves[1] =
+                    scope.launch {
+                        if (far) swell.animateTo(1f, SwellIn)
+                        moves[0]?.join()
+                        if (!pressing) swell.animateTo(0f, SwellOut)
+                    }
+            }
+
             LaunchedEffect(selected, itemPx) {
-                if (lens.value.isNaN()) lens.snapTo(itemPx * selected)
-                else if (!pressing) {
-                    lens.animateTo(
-                        itemPx * selected,
-                        spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
-                    )
+                when {
+                    lens.value.isNaN() -> {
+                        lens.snapTo(itemPx * selected)
+                        aimed = selected
+                    }
+                    // Paging we started from the bar passes through the tabs in between; ignore them.
+                    !pressing && selected != aimed && moves[0]?.isActive != true -> glideTo(selected)
+                    // Rotation or a new width: keep the lens on its tab.
+                    !pressing && moves[0]?.isActive != true -> lens.snapTo(itemPx * aimed)
                 }
             }
-            val left = if (lens.value.isNaN()) itemPx * selected else lens.value
+
+            // Everything that changes per frame is read here, from layout and draw only, so the
+            // tabs aren't recomposed on every frame of the glide.
+            fun frame(): LensFrame {
+                val left = lens.value.let { if (it.isNaN()) itemPx * selected else it }
+                val s = swell.value
+                // Speed pulls the droplet long and thin; px/s, from the spring itself.
+                val speed = maxOf(abs(lens.velocity), abs(followSpeed))
+                val stretch = (speed / 6000f).coerceAtMost(0.22f)
+                val w = itemPx * (1f + 0.30f * s) * (1f + stretch)
+                val h = rowPx * (1f + 0.38f * s) * (1f - stretch * 0.35f)
+                return LensFrame(left + itemPx / 2f - w / 2f, rowPx / 2f - h / 2f, w, h, s)
+            }
+            fun RuntimeShader.configure(f: LensFrame) {
+                setFloatUniform("size", f.w, f.h)
+                setFloatUniform("radius", f.h / 2f)
+                setFloatUniform("depth", with(density) { (7.dp + 7.dp * f.swell).toPx() })
+                setFloatUniform("zoom", 1f + 0.2f * f.swell)
+                setFloatUniform("chroma", with(density) { 2.5.dp.toPx() } * f.swell)
+            }
+            val frost = if (dark) colors.surfaceContainerHigh else Color.White
+            val accent = colors.primary
 
             TabRow(items, selected = -1, itemWidth, tint = colors.onSurfaceVariant)
 
-            // The lens, centred on its tab and grown by the press and the drag speed.
-            val w = itemPx * (1f + 0.34f * press) * (1f + stretch)
-            val h = rowPx * (1f + 0.42f * press) * (1f - stretch * 0.35f)
-            val x = left + itemPx / 2f - w / 2f
-            val y = rowPx / 2f - h / 2f
-            val depth = with(density) { (7.dp + 7.dp * press).toPx() }
-            val zoom = 1f + 0.2f * press
-            val chroma = with(density) { 2.5.dp.toPx() } * press
-            // Frosted at rest; while pressed a lighter frost, so colours read through but text doesn't.
-            val blur = with(density) { (10.dp * (1f - press) + 4.dp * press).toPx() }
-            fun RuntimeShader.configure() {
-                setFloatUniform("size", w, h)
-                setFloatUniform("radius", h / 2f)
-                setFloatUniform("depth", depth)
-                setFloatUniform("zoom", zoom)
-                setFloatUniform("chroma", chroma)
-            }
+            // The lens, centred on its tab and grown by the swell and the speed.
             Box(
-                Modifier.placeAt(x, y, w, h)
+                Modifier.placeAt { val f = frame(); Placement(f.x, f.y, f.w, f.h) }
                     .graphicsLayer {
-                        shadowElevation = 10.dp.toPx() * press
+                        shadowElevation = 10.dp.toPx() * swell.value
                         shape = Pill
                         clip = false
                     }
                     .drawWithContent {
                         drawContent()
+                        val s = swell.value
                         val outline = Pill.createOutline(size, layoutDirection, this)
                         val rim =
                             Brush.verticalGradient(
                                 0f to Color.White.copy(alpha = if (dark) 0.5f else 0.95f),
-                                0.5f to Color.White.copy(alpha = 0.15f + 0.2f * press),
+                                0.5f to Color.White.copy(alpha = 0.15f + 0.2f * s),
                                 1f to Color.White.copy(alpha = if (dark) 0.3f else 0.6f),
                             )
-                        drawOutline(outline, rim, style = Stroke((1f + 0.6f * press).dp.toPx()))
+                        drawOutline(outline, rim, style = Stroke((1f + 0.6f * s).dp.toPx()))
                     }
                     .clip(Pill)
             ) {
-                // What's behind the bar: frosted at rest, clear and magnified while pressed.
+                // What's behind the bar: frosted at rest, clear and magnified while swollen.
                 Box(
                     Modifier.fillMaxSize()
                         .graphicsLayer {
-                            backShader.configure()
+                            val f = frame()
+                            backShader.configure(f)
+                            val blur = (10.dp * (1f - f.swell) + 4.dp * f.swell).toPx()
                             val bubble = RenderEffect.createRuntimeShaderEffect(backShader, "content")
                             renderEffect =
                                 (if (blur > 0.5f) {
@@ -222,31 +257,31 @@ internal fun GlassTabBar(
                                     .asComposeRenderEffect()
                         }
                         .drawBehind {
+                            val f = frame()
                             drawRect(colors.surfaceContainer)
-                            translate(backdrop.origin.x - rowOrigin.x - x, backdrop.origin.y - rowOrigin.y - y) {
+                            translate(backdrop.origin.x - rowOrigin.x - f.x, backdrop.origin.y - rowOrigin.y - f.y) {
                                 drawLayer(backdrop.layer)
                             }
                         }
                 )
                 // The frost and the accent tint fade as the droplet clears.
                 Box(
-                    Modifier.fillMaxSize()
-                        .background(
-                            (if (dark) colors.surfaceContainerHigh else Color.White)
-                                .copy(alpha = (if (dark) 0.5f else 0.55f) * (1f - press) + 0.22f * press)
-                        )
-                        .background(colors.primary.copy(alpha = 0.10f * (1f - press)))
+                    Modifier.fillMaxSize().drawBehind {
+                        val s = swell.value
+                        drawRect(frost.copy(alpha = (if (dark) 0.5f else 0.55f) * (1f - s) + 0.22f * s))
+                        drawRect(accent.copy(alpha = 0.10f * (1f - s)))
+                    }
                 )
                 // The tabs again, in the accent colour, magnified with the backdrop.
                 Box(
                     Modifier.fillMaxSize().graphicsLayer {
-                        frontShader.configure()
+                        frontShader.configure(frame())
                         renderEffect =
                             RenderEffect.createRuntimeShaderEffect(frontShader, "content")
                                 .asComposeRenderEffect()
                     }
                 ) {
-                    Box(Modifier.placeAt(-x, -y, totalPx, rowPx)) {
+                    Box(Modifier.placeAt { val f = frame(); Placement(-f.x, -f.y, totalPx, rowPx) }) {
                         TabRow(items, selected = selected, itemWidth, tint = colors.primary)
                     }
                 }
@@ -258,43 +293,67 @@ internal fun GlassTabBar(
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         pressing = true
-                        val tracker = VelocityTracker()
-                        tracker.addPosition(down.uptimeMillis, down.position)
+                        moves[1]?.cancel()
+                        moves[1] = scope.launch { swell.animateTo(1f, SwellIn) }
                         var fingerX = down.position.x
                         var over = (fingerX / itemPx).toInt().coerceIn(0, items.lastIndex)
                         val slack = itemPx * 0.2f
                         fun target(fx: Float) =
                             (fx - itemPx / 2f).coerceIn(-slack, itemPx * items.lastIndex + slack)
-                        scope.launch {
-                            lens.animateTo(
-                                target(fingerX),
-                                spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
-                            )
-                        }
+                        // Only start following once the finger actually slides, so a tap glides
+                        // straight to its tab instead of lunging at the finger first.
+                        var sliding = false
+                        var aim = 0f
+                        val finished = try {
                         drag(down.id) { change ->
                             fingerX = change.position.x
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            velocity = tracker.calculateVelocity().x
-                            scope.launch { lens.snapTo(target(fingerX)) }
-                            val now = (fingerX / itemPx).toInt().coerceIn(0, items.lastIndex)
-                            if (now != over) {
-                                over = now
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            if (!sliding && abs(fingerX - down.position.x) > viewConfiguration.touchSlop) {
+                                sliding = true
+                                moves[0]?.cancel()
+                                // One loop for the whole drag: each frame the lens closes most of the
+                                // gap to the finger, so it never stalls and never jitters.
+                                moves[0] =
+                                    scope.launch {
+                                        lens.stop()
+                                        var last = 0L
+                                        while (isActive) {
+                                            val now = withFrameNanos { it }
+                                            val dt = if (last == 0L) 8f else (now - last) / 1_000_000f
+                                            last = now
+                                            val from = lens.value
+                                            val next = from + (aim - from) * (1f - exp(-dt / FOLLOW_LAG_MS))
+                                            lens.snapTo(next)
+                                            followSpeed = (next - from) / dt * 1000f
+                                        }
+                                    }
+                            }
+                            aim = target(fingerX)
+                            if (sliding) {
+                                val now = (fingerX / itemPx).toInt().coerceIn(0, items.lastIndex)
+                                if (now != over) {
+                                    over = now
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                             }
                             change.consume()
                         }
-                        pressing = false
-                        velocity = 0f
-                        val chosen = (fingerX / itemPx).toInt().coerceIn(0, items.lastIndex)
-                        scope.launch {
-                            lens.animateTo(
-                                itemPx * chosen,
-                                spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
-                            )
+                        } catch (e: CancellationException) {
+                            // The gesture was torn down mid-press: put the lens back on its tab.
+                            pressing = false
+                            glideTo(aimed)
+                            throw e
                         }
+                        pressing = false
+                        if (!finished) {
+                            // Another handler took the pointer: nothing was chosen.
+                            glideTo(aimed)
+                            return@awaitEachGesture
+                        }
+                        val chosen = (fingerX / itemPx).toInt().coerceIn(0, items.lastIndex)
                         if (chosen != current) {
                             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                         }
+                        glideTo(chosen)
                         select(chosen)
                     }
                 }
@@ -334,8 +393,12 @@ private fun TabRow(items: List<TabItem>, selected: Int, itemWidth: Dp, tint: Col
     }
 }
 
-/** Places this at ([x], [y]) with size [w] x [h], taking no space in the parent. */
-private fun Modifier.placeAt(x: Float, y: Float, w: Float, h: Float): Modifier = layout { m, _ ->
-    val p = m.measure(Constraints.fixed(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1)))
-    layout(0, 0) { p.place(x.roundToInt(), y.roundToInt()) }
+private class Placement(val x: Float, val y: Float, val w: Float, val h: Float)
+
+/** Places this where [at] says, taking no space in the parent. [at] is read during layout only. */
+private fun Modifier.placeAt(at: () -> Placement): Modifier = layout { m, _ ->
+    val p = at()
+    val placeable =
+        m.measure(Constraints.fixed(p.w.roundToInt().coerceAtLeast(1), p.h.roundToInt().coerceAtLeast(1)))
+    layout(0, 0) { placeable.place(p.x.roundToInt(), p.y.roundToInt()) }
 }
