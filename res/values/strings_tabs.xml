@@ -184,6 +184,8 @@
     <string name="row_sleep_mode_summary">Turn off connections and sensors while you sleep</string>
     <string name="row_power_insight">PowerInsight</string>
     <string name="row_power_insight_summary">Battery statistics and live power use</string>
+    <string name="row_doze_wakelock_guard">Deep sleep guard</string>
+    <string name="row_doze_wakelock_guard_summary">While the phone idles, stop idle background services from keeping it awake. Music, calls, navigation and active downloads are not affected</string>
     <string name="section_spoofing">Spoofing</string>
     <string name="row_pif">Play Integrity</string>
     <string name="row_pif_summary">Fingerprint and the automatic fetch</string>

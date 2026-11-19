@@ -583,6 +583,14 @@ object LabTabs {
                                 R.string.row_power_insight_summary,
                                 R.drawable.materialsymbols_ic_monitoring_rounded_filled,
                             ),
+                            LabRow.Toggle(
+                                Table.Global,
+                                "penguin_doze_wakelock_guard",
+                                R.string.row_doze_wakelock_guard,
+                                R.string.row_doze_wakelock_guard_summary,
+                                default = true,
+                                icon = R.drawable.materialsymbols_ic_bedtime_rounded_filled,
+                            ),
                         ),
                     ),
                     LabSection(
