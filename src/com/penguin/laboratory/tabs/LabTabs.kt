@@ -635,6 +635,18 @@ object LabTabs {
                         ),
                     ),
                     LabSection(
+                        R.string.section_diagnostics,
+                        listOf(
+                            LabRow.Toggle(
+                                Table.Global,
+                                "penguin_flightlog",
+                                R.string.row_flightlog,
+                                R.string.row_flightlog_summary,
+                                icon = R.drawable.materialsymbols_ic_bug_report_rounded_filled,
+                            ),
+                        ),
+                    ),
+                    LabSection(
                         R.string.section_system_more,
                         listOf(
                             LabRow.Toggle(

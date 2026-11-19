@@ -198,6 +198,9 @@
     <string name="row_hw_spoof">CPU and GPU spoofing</string>
     <string name="row_hw_spoof_summary">The chip each app sees, set when it starts</string>
     <string name="section_system_more">System</string>
+    <string name="section_diagnostics">Diagnostics</string>
+    <string name="row_flightlog">Crash recorder</string>
+    <string name="row_flightlog_summary">Keeps the kernel log, system crash logs and resource use from this session and the last one, so a bug report taken after a freeze or an unexpected restart shows what happened. App logs are not recorded, nothing leaves the phone unless you share a bug report, and turning this off deletes the logs after 15 minutes</string>
     <string name="row_secure_screenshots">Screenshots of secure apps</string>
     <string name="row_secure_screenshots_summary">Capture apps that block it. Take care: this can expose private content.</string>
     <string name="row_downgrade">Allow app downgrades</string>
