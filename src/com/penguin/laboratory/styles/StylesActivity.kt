@@ -7,7 +7,11 @@
 
 package com.penguin.laboratory.styles
 
+import android.app.TimePickerDialog
 import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import android.text.format.DateFormat
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -22,7 +26,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +58,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -67,6 +79,42 @@ object StylesStore {
     const val VOLUME_PANEL = "volume_panel_style"
     const val POWER_MENU = "power_menu_style"
     const val UDFPS_SCREEN_OFF_ICON = "doze_udfps_icon"
+    // Read by SystemUI (doze/PenguinDozeTap.java).
+    const val DOZE_TAP = "doze_tap_gesture"
+    const val TAP_ACTION = "penguin_doze_tap_action"
+    const val UDFPS_SCHEDULE = "penguin_doze_udfps_icon_schedule"
+    const val UDFPS_START = "penguin_doze_udfps_icon_start"
+    const val UDFPS_END = "penguin_doze_udfps_icon_end"
+    const val TAP_SENSOR_TYPE = "org.penguin.sensor.single_tap"
+
+    /** Single tap on the dark screen: nothing, show icon, ambient display, wake. */
+    val tapActions =
+        listOf(
+            Choice(0, R.string.styles_tap_none),
+            Choice(1, R.string.styles_tap_icon),
+            Choice(2, R.string.styles_tap_ambient),
+            Choice(3, R.string.styles_tap_wake),
+        )
+
+    fun tapAction(context: Context): Int =
+        if (get(context, DOZE_TAP, 0) == 0) 0 else get(context, TAP_ACTION, 2)
+
+    fun setTapAction(context: Context, action: Int) {
+        if (action != 0) put(context, TAP_ACTION, action)
+        put(context, DOZE_TAP, if (action != 0) 1 else 0)
+    }
+
+    fun tapSensorAvailable(context: Context): Boolean =
+        context.getSystemService(SensorManager::class.java)?.getSensorList(Sensor.TYPE_ALL)?.any {
+            it.stringType == TAP_SENSOR_TYPE
+        } == true
+
+    fun formatMinutes(context: Context, minutes: Int): String {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, minutes / 60)
+        c.set(java.util.Calendar.MINUTE, minutes % 60)
+        return DateFormat.getTimeFormat(context).format(c.time)
+    }
 
     /** A style with the value SystemUI reads and its label. */
     class Choice(val value: Int, @StringRes val label: Int)
@@ -131,6 +179,21 @@ class StylesActivity : ComponentActivity() {
         var power by
             remember(generation) { mutableStateOf(StylesStore.get(context, StylesStore.POWER_MENU, 0)) }
         val udfpsIcons = remember { UdfpsPack.ICON.load(context) }
+        val tapAvailable = remember { StylesStore.tapSensorAvailable(context) }
+        var tapAction by remember(generation) { mutableIntStateOf(StylesStore.tapAction(context)) }
+        var tapDialog by remember { mutableStateOf(false) }
+        var schedule by
+            remember(generation) {
+                mutableStateOf(StylesStore.get(context, StylesStore.UDFPS_SCHEDULE, 0) != 0)
+            }
+        var scheduleStart by
+            remember(generation) {
+                mutableIntStateOf(StylesStore.get(context, StylesStore.UDFPS_START, 7 * 60))
+            }
+        var scheduleEnd by
+            remember(generation) {
+                mutableIntStateOf(StylesStore.get(context, StylesStore.UDFPS_END, 23 * 60))
+            }
         val udfpsAnimations = remember { UdfpsPack.ANIMATION.load(context) }
         val udfpsIcon = remember(generation) { UdfpsPack.ICON.get(context) }
         val udfpsAnimation = remember(generation) { UdfpsPack.ANIMATION.get(context) }
@@ -261,7 +324,13 @@ class StylesActivity : ComponentActivity() {
                     item { SectionHeader(stringResource(R.string.styles_udfps_title)) }
                     item {
                         SegmentedGroup {
-                            val count = udfps.size + 1
+                            val scheduleRows =
+                                when {
+                                    alwaysOnDisplay -> 0
+                                    schedule -> 3
+                                    else -> 1
+                                }
+                            val count = udfps.size + 1 + scheduleRows + (if (tapAvailable) 1 else 0)
                             udfps.forEachIndexed { index, (pack, entries, chosen) ->
                                 UdfpsItem(pack, entries.getOrNull(chosen), chosen, playing, index, count)
                             }
@@ -286,11 +355,132 @@ class StylesActivity : ComponentActivity() {
                                 count = count,
                                 icon = R.drawable.materialsymbols_ic_mobile_off_rounded_filled,
                             )
+                            var row = udfps.size + 1
+                            if (!alwaysOnDisplay) {
+                                SwitchItem(
+                                    title = stringResource(R.string.styles_udfps_schedule),
+                                    supporting = stringResource(R.string.styles_udfps_schedule_summary),
+                                    checked = schedule,
+                                    enabled = udfpsScreenOff,
+                                    onCheckedChange = {
+                                        StylesStore.put(context, StylesStore.UDFPS_SCHEDULE, if (it) 1 else 0)
+                                        schedule = it
+                                    },
+                                    index = row++,
+                                    count = count,
+                                    icon = R.drawable.materialsymbols_ic_schedule_rounded_filled,
+                                )
+                                if (schedule) {
+                                    TimeItem(
+                                        stringResource(R.string.styles_udfps_schedule_from),
+                                        scheduleStart,
+                                        udfpsScreenOff,
+                                        row++,
+                                        count,
+                                    ) {
+                                        StylesStore.put(context, StylesStore.UDFPS_START, it)
+                                        scheduleStart = it
+                                    }
+                                    TimeItem(
+                                        stringResource(R.string.styles_udfps_schedule_to),
+                                        scheduleEnd,
+                                        udfpsScreenOff,
+                                        row++,
+                                        count,
+                                    ) {
+                                        StylesStore.put(context, StylesStore.UDFPS_END, it)
+                                        scheduleEnd = it
+                                    }
+                                }
+                            }
+                            if (tapAvailable) {
+                                val label =
+                                    StylesStore.tapActions.firstOrNull { it.value == tapAction }?.label
+                                        ?: R.string.styles_tap_none
+                                SegmentedListItem(
+                                    onClick = { tapDialog = true },
+                                    shapes = ListItemDefaults.segmentedShapes(row, count),
+                                    leadingContent = {
+                                        Icon(
+                                            painterResource(R.drawable.materialsymbols_ic_touch_app_rounded_filled),
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    supportingContent = { Text(stringResource(label)) },
+                                ) {
+                                    Text(stringResource(R.string.styles_tap_title))
+                                }
+                            }
+                        }
+                        if (tapDialog) {
+                            TapActionDialog(tapAction, onDismiss = { tapDialog = false }) {
+                                StylesStore.setTapAction(context, it)
+                                tapAction = it
+                                tapDialog = false
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    @Composable
+    private fun TimeItem(
+        title: String,
+        minutes: Int,
+        enabled: Boolean,
+        index: Int,
+        count: Int,
+        onChange: (Int) -> Unit,
+    ) {
+        val context = this
+        SegmentedListItem(
+            onClick = {
+                TimePickerDialog(
+                        context,
+                        { _, hour, minute -> onChange(hour * 60 + minute) },
+                        minutes / 60,
+                        minutes % 60,
+                        DateFormat.is24HourFormat(context),
+                    )
+                    .show()
+            },
+            enabled = enabled,
+            shapes = ListItemDefaults.segmentedShapes(index, count),
+            leadingContent = {
+                Icon(painterResource(R.drawable.materialsymbols_ic_lock_clock_rounded_filled), null)
+            },
+            supportingContent = { Text(StylesStore.formatMinutes(context, minutes)) },
+        ) {
+            Text(title)
+        }
+    }
+
+    @Composable
+    private fun TapActionDialog(current: Int, onDismiss: () -> Unit, onChoose: (Int) -> Unit) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(R.string.styles_tap_title)) },
+            text = {
+                Column {
+                    StylesStore.tapActions.forEach { choice ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable(role = Role.RadioButton) { onChoose(choice.value) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = choice.value == current, onClick = null)
+                            Text(stringResource(choice.label), Modifier.padding(start = 16.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+            },
+        )
     }
 
     @Composable

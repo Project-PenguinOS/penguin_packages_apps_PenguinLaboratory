@@ -207,6 +207,15 @@
     <string name="styles_udfps_screen_off">Show icon when screen is off</string>
     <string name="styles_udfps_screen_off_summary">Keeps a dimmed fingerprint icon on the dark screen while Always on display is off. Uses a little more battery</string>
     <string name="styles_udfps_screen_off_aod">Always on while Always-on display is on</string>
+    <string name="styles_udfps_schedule">Show icon on a schedule</string>
+    <string name="styles_udfps_schedule_summary">Only between the times below; outside them the screen stays fully dark</string>
+    <string name="styles_udfps_schedule_from">From</string>
+    <string name="styles_udfps_schedule_to">Until</string>
+    <string name="styles_tap_title">Single tap when screen is off</string>
+    <string name="styles_tap_none">Nothing</string>
+    <string name="styles_tap_icon">Show the fingerprint icon</string>
+    <string name="styles_tap_ambient">Show ambient display, tap again to open</string>
+    <string name="styles_tap_wake">Wake the screen</string>
 
     <!-- Experiments -->
     <string name="experiments_title">Experiments</string>
