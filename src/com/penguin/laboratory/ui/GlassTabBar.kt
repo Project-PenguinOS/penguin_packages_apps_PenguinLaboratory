@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,7 +123,10 @@ private val SwellOut = spring<Float>(dampingRatio = 0.9f, stiffness = 320f)
 /** Where the lens is this frame. Read only while laying out or drawing, never in composition. */
 private class LensFrame(val x: Float, val y: Float, val w: Float, val h: Float, val swell: Float)
 
-/** Tabs with a lens under the chosen one that can be dragged between tabs. */
+/**
+ * Tabs with a lens under the chosen one that can be dragged between tabs. While the pages are
+ * being swiped ([pagePosition] not null), the lens rides along with them.
+ */
 @Composable
 internal fun GlassTabBar(
     items: List<TabItem>,
@@ -130,6 +134,7 @@ internal fun GlassTabBar(
     onSelect: (Int) -> Unit,
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    pagePosition: (() -> Float)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -139,6 +144,7 @@ internal fun GlassTabBar(
     // The gesture below outlives recompositions, so it reads these through state.
     val current by rememberUpdatedState(selected)
     val select by rememberUpdatedState(onSelect)
+    val swipe by rememberUpdatedState(pagePosition)
     var rowOrigin by remember { mutableStateOf(Offset.Zero) }
     val lens = remember { Animatable(Float.NaN) }
     val swell = remember { Animatable(0f) }
@@ -186,11 +192,26 @@ internal fun GlassTabBar(
                         lens.snapTo(itemPx * selected)
                         aimed = selected
                     }
-                    // Paging we started from the bar passes through the tabs in between; ignore them.
-                    !pressing && selected != aimed && moves[0]?.isActive != true -> glideTo(selected)
+                    // Any new page, even mid-glide: the glide just retargets. (Paging from the bar
+                    // keeps [selected] on its target, so the tabs in between never show up here.)
+                    !pressing && selected != aimed -> glideTo(selected)
                     // Rotation or a new width: keep the lens on its tab.
                     !pressing && moves[0]?.isActive != true -> lens.snapTo(itemPx * aimed)
                 }
+            }
+
+            // Swiping the pages carries the lens with them, so it can't run ahead to a page the
+            // swipe then turns back from, or fall behind a quick run of swipes.
+            LaunchedEffect(itemPx) {
+                snapshotFlow { swipe?.invoke() ?: Float.NaN }
+                    .collect { position ->
+                        if (position.isNaN() || pressing || lens.value.isNaN()) return@collect
+                        val to = itemPx * position.coerceIn(0f, items.lastIndex.toFloat())
+                        moves[0]?.cancel()
+                        followSpeed = 0f
+                        lens.snapTo(to)
+                        aimed = position.roundToInt().coerceIn(0, items.lastIndex)
+                    }
             }
 
             // Everything that changes per frame is read here, from layout and draw only, so the

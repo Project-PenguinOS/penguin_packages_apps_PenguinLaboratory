@@ -210,7 +210,10 @@ fun GlassSurface(
     }
 }
 
-/** The Lab's floating tab bar. While [collapsed] only the current tab shows. */
+/**
+ * The Lab's floating tab bar. While [collapsed] only the current tab shows. [pagePosition] is the
+ * fractional page while the user swipes the pages, else null.
+ */
 @Composable
 fun FloatingTabBar(
     items: List<TabItem>,
@@ -221,6 +224,7 @@ fun FloatingTabBar(
     onExpand: () -> Unit,
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    pagePosition: (() -> Float)? = null,
 ) {
     AnimatedContent(
         targetState = collapsed,
@@ -237,7 +241,7 @@ fun FloatingTabBar(
         if (small) {
             MiniBar(items[selected], glass, backdrop, onExpand)
         } else if (glass) {
-            GlassTabBar(items, selected, onSelect, backdrop)
+            GlassTabBar(items, selected, onSelect, backdrop, pagePosition = pagePosition)
         } else {
             MaterialBar(items, selected, onSelect, backdrop)
         }

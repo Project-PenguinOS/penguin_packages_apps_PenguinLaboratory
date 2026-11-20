@@ -338,6 +338,11 @@ class LaboratoryActivity : ComponentActivity() {
                     collapsed = collapsed,
                     onExpand = { collapsed = false },
                     backdrop = backdrop,
+                    // The user's own swipe (and its settle), not paging started from the bar.
+                    pagePosition =
+                        if (pager.isScrollInProgress && jumpTo < 0) {
+                            { pager.currentPage + pager.currentPageOffsetFraction }
+                        } else null,
                     modifier =
                         Modifier.align(Alignment.BottomCenter)
                             .padding(bottom = padding.calculateBottomPadding() + 12.dp),
