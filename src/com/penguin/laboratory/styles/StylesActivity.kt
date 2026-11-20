@@ -475,6 +475,14 @@ class StylesActivity : ComponentActivity() {
                             Text(stringResource(choice.label), Modifier.padding(start = 16.dp))
                         }
                     }
+                    // The panel can't tell a double tap from two single taps while the single
+                    // tap gesture is armed, so the power service holds double tap to wake off.
+                    Text(
+                        stringResource(R.string.styles_tap_double_tap_note),
+                        Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             },
             confirmButton = {

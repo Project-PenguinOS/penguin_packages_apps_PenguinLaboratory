@@ -216,6 +216,7 @@
     <string name="styles_tap_icon">Show the fingerprint icon</string>
     <string name="styles_tap_ambient">Show ambient display, tap again to open</string>
     <string name="styles_tap_wake">Wake the screen</string>
+    <string name="styles_tap_double_tap_note">Double tap to wake is off while a single tap does something.</string>
 
     <!-- Experiments -->
     <string name="experiments_title">Experiments</string>
