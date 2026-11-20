@@ -145,6 +145,7 @@ internal fun GlassTabBar(
     val current by rememberUpdatedState(selected)
     val select by rememberUpdatedState(onSelect)
     val swipe by rememberUpdatedState(pagePosition)
+    val riding = pagePosition != null
     var rowOrigin by remember { mutableStateOf(Offset.Zero) }
     val lens = remember { Animatable(Float.NaN) }
     val swell = remember { Animatable(0f) }
@@ -186,12 +187,15 @@ internal fun GlassTabBar(
                     }
             }
 
-            LaunchedEffect(selected, itemPx) {
+            LaunchedEffect(selected, itemPx, riding) {
                 when {
                     lens.value.isNaN() -> {
                         lens.snapTo(itemPx * selected)
                         aimed = selected
                     }
+                    // Mid-swipe the target page flips with every wobble of the finger; the lens
+                    // follows the pages below instead, and catches up here once they let go.
+                    riding -> Unit
                     // Any new page, even mid-glide: the glide just retargets. (Paging from the bar
                     // keeps [selected] on its target, so the tabs in between never show up here.)
                     !pressing && selected != aimed -> glideTo(selected)
@@ -203,11 +207,21 @@ internal fun GlassTabBar(
             // Swiping the pages carries the lens with them, so it can't run ahead to a page the
             // swipe then turns back from, or fall behind a quick run of swipes.
             LaunchedEffect(itemPx) {
+                var following = false
                 snapshotFlow { swipe?.invoke() ?: Float.NaN }
                     .collect { position ->
-                        if (position.isNaN() || pressing || lens.value.isNaN()) return@collect
+                        if (position.isNaN() || pressing || lens.value.isNaN()) {
+                            following = false
+                            return@collect
+                        }
                         val to = itemPx * position.coerceIn(0f, items.lastIndex.toFloat())
                         moves[0]?.cancel()
+                        if (!following) {
+                            // Riding with the pages, the lens stays flat in the bar.
+                            following = true
+                            moves[1]?.cancel()
+                            if (swell.value != 0f) moves[1] = scope.launch { swell.animateTo(0f, SwellOut) }
+                        }
                         followSpeed = 0f
                         lens.snapTo(to)
                         aimed = position.roundToInt().coerceIn(0, items.lastIndex)
