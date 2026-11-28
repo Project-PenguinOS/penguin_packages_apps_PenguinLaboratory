@@ -63,6 +63,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalScrollCaptureInProgress
 import androidx.compose.ui.graphics.Color
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -134,9 +136,13 @@ class LaboratoryActivity : ComponentActivity() {
         var jumpTo by remember { mutableIntStateOf(-1) }
 
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        // A long screenshot scrolls the list itself and stitches what it draws: the title bar
+        // must not collapse under it, or the list moves by less than the screenshot counts.
+        val capturing = LocalScrollCaptureInProgress.current
         Scaffold(
             modifier =
-                Modifier.nestedScroll(scrollBehavior.nestedScrollConnection).nestedScroll(hideOnScroll),
+                if (capturing) Modifier
+                else Modifier.nestedScroll(scrollBehavior.nestedScrollConnection).nestedScroll(hideOnScroll),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             topBar = {
                 LargeFlexibleTopAppBar(
@@ -160,13 +166,19 @@ class LaboratoryActivity : ComponentActivity() {
                 PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = padding.calculateTopPadding() + 8.dp,
-                    bottom = padding.calculateBottomPadding() + TabBarClearance,
+                    top = 8.dp,
+                    // The tab bar is hidden from a long screenshot, so is the room kept for it.
+                    bottom = padding.calculateBottomPadding() + if (capturing) 0.dp else TabBarClearance,
                 )
             Box(Modifier.fillMaxSize()) {
                 HorizontalPager(
                     state = pager,
-                    modifier = Modifier.fillMaxSize().backdropSource(backdrop),
+                    // The lists start below the title bar, so a long screenshot of them does not
+                    // take the bar along.
+                    modifier =
+                        Modifier.fillMaxSize()
+                            .backdropSource(backdrop)
+                            .padding(top = padding.calculateTopPadding()),
                     beyondViewportPageCount = 1,
                 ) { index ->
                     if (index == 0) {
@@ -343,9 +355,11 @@ class LaboratoryActivity : ComponentActivity() {
                         if (pager.isScrollInProgress && jumpTo < 0) {
                             { pager.currentPage + pager.currentPageOffsetFraction }
                         } else null,
+                    // Floats over the list, so a long screenshot would stitch it into the page.
                     modifier =
                         Modifier.align(Alignment.BottomCenter)
-                            .padding(bottom = padding.calculateBottomPadding() + 12.dp),
+                            .padding(bottom = padding.calculateBottomPadding() + 12.dp)
+                            .alpha(if (capturing) 0f else 1f),
                 )
             }
         }
